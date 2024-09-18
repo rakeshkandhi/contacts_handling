@@ -1,9 +1,7 @@
 import csv
 import re
-import pandas as pd
-import vobject
 import chardet
-import csv
+import pandas as pd
 import vobject
 
 name_pattern = re.compile(r"N:([^;]*);([^;]*)")
@@ -11,6 +9,13 @@ full_name_pattern = re.compile(r"FN:(.*)")
 phone_pattern = re.compile(r"TEL.*:(.*)")
 email_pattern = re.compile(r"EMAIL.*:(.*)")
 photo_pattern = re.compile(r"PHOTO.*:(.*)")
+
+def remove_duplicates(phone_numbers):
+    if (phone_numbers == None):
+        return None
+    phone_list = [phone.strip() for phone in phone_numbers.split(',')]
+    unique_phones = list(set(phone_list))
+    return ', '.join(unique_phones)
 
 def detect_encoding(file_path):
     """Detect the encoding of a file."""
@@ -23,7 +28,7 @@ def save_vcf_to_text(input_file_path, output_file_path="contactsTxt.txt"):
     """Read a VCF file and save its content to a text file."""
     try:
         encoding = detect_encoding(input_file_path)
-        with open(input_file_path, "r", encoding=encoding, errors="replace") as vcf:
+        with open(input_file_path, "r", errors="replace") as vcf:
             vcard_data = vcf.read()
         with open(output_file_path, "w", encoding="utf-8") as txt:
             txt.write(vcard_data)
@@ -60,6 +65,7 @@ def vcf_to_sorted_csv(vcf_file, csv_file):
                 contact["email"] = email_match.group(1)
             photo_match = photo_pattern.search(line)
             if photo_match:
+                print(photo_match)
                 contact["photo"] = photo_match.group(1)
             if line.startswith("END:VCARD"):
                 contact["phones"] = ", ".join(contact.get("phones", []))
@@ -98,6 +104,7 @@ def csv_to_vcf(csv_file, vcf_file):
             reader = csv.DictReader(csvf)
             for row in reader:
                 vcard = vobject.vCard()
+
                 full_name = row.get("Full Name", "").strip()
                 if full_name:
                     vcard.add("fn").value = full_name
@@ -108,25 +115,32 @@ def csv_to_vcf(csv_file, vcf_file):
                         vcard.add("fn").value = f"{first_name} {last_name}".strip()
                     else:
                         continue
+
                 name_field = vcard.add("n")
                 name_field.value = vobject.vcard.Name(
                     family=row.get("Last Name", "").strip(),
-                    given=row.get("First Name", "").strip()
+                    given=row.get("First Name", "").strip(),
                 )
+
                 phone_numbers = row.get("Phone Numbers", "").split(", ")
+                phone_numbers = remove_duplicates(phone_numbers)
                 for phone in phone_numbers:
-                    if phone:  
+                    if phone:
                         vcard.add("tel").value = phone
+
                 email = row.get("Email", "").strip()
                 if email:
                     vcard.add("email").value = email
-                vcf_data += vcard.serialize() + "\n"  
+
+                vcf_data += (vcard.serialize() + "\n")  
+
     except FileNotFoundError:
         print(f"Error: The file {csv_file} does not exist.")
         return
     except Exception as e:
         print(f"An error occurred: {e}")
         return
+
     try:
         with open(vcf_file, "w", encoding="utf-8") as vcf:
             vcf.write(vcf_data)
